@@ -27,7 +27,7 @@ public abstract class DemoActivity extends ActionBarActivity implements Foregrou
             }
         });
 
-        listenerBinding = Foreground.get(getApplication()).addListener(this);
+        listenerBinding = Foreground.init(getApplication()).addListener(this);
     }
 
     @Override

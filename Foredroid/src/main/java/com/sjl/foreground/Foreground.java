@@ -60,7 +60,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 public class Foreground implements Application.ActivityLifecycleCallbacks {
 
     public static final String TAG = Foreground.class.getName();
-    public static final long CHECK_DELAY = 2000;
+    private static final long DEFAULT_CHECK_DELAY = 2000;
 
     public interface Listener {
         public void onBecameForeground();
@@ -125,18 +125,20 @@ public class Foreground implements Application.ActivityLifecycleCallbacks {
     private Listeners listeners = new Listeners();
     private Handler handler = new Handler();
     private Runnable check;
+    private final Long checkDelay;
 
-    public static Foreground init(Application application){
-        if (instance == null) {
-            instance = new Foreground();
-            application.registerActivityLifecycleCallbacks(instance);
-        }
-        return instance;
+    private Foreground(Long checkDelay){
+        this.checkDelay = checkDelay;
     }
 
-    public static Foreground get(Application application){
+    public static Foreground init(Application application){
+        return init(application, DEFAULT_CHECK_DELAY);
+    }
+
+    public static Foreground init(Application application, Long checkDelay){
         if (instance == null) {
-            init(application);
+            instance = new Foreground(checkDelay);
+            application.registerActivityLifecycleCallbacks(instance);
         }
         return instance;
     }
@@ -162,26 +164,7 @@ public class Foreground implements Application.ActivityLifecycleCallbacks {
     }
 
     @Override
-    public void onActivityResumed(Activity activity) {}
-
-    @Override
-    public void onActivityPaused(Activity activity) {
-        // if we're changing configurations we aren't going background so
-        // no need to schedule the check
-        if (!activity.isChangingConfigurations()) {
-            // don't prevent activity being gc'd
-            final WeakReference<Activity> ref = new WeakReference<>(activity);
-            handler.postDelayed(check = new Runnable() {
-                @Override
-                public void run() {
-                    onActivityCeased(ref.get());
-                }
-            }, CHECK_DELAY);
-        }
-    }
-
-    @Override
-    public void onActivityStarted(Activity activity) {
+    public void onActivityResumed(Activity activity) {
         current = activity;
         // remove any scheduled checks since we're starting another activity
         // we're definitely not going background
@@ -200,12 +183,26 @@ public class Foreground implements Application.ActivityLifecycleCallbacks {
     }
 
     @Override
-    public void onActivityStopped(Activity activity) {
-        if (check != null) {
-            handler.removeCallbacks(check);
+    public void onActivityPaused(Activity activity) {
+        // if we're changing configurations we aren't going background so
+        // no need to schedule the check
+        if (!activity.isChangingConfigurations()) {
+            // don't prevent activity being gc'd
+            final WeakReference<Activity> ref = new WeakReference<>(activity);
+            handler.postDelayed(check = new Runnable() {
+                @Override
+                public void run() {
+                    onActivityCeased(ref.get());
+                }
+            }, checkDelay);
         }
-        onActivityCeased(activity);
     }
+
+    @Override
+    public void onActivityStarted(Activity activity) {}
+
+    @Override
+    public void onActivityStopped(Activity activity) {}
 
     @Override
     public void onActivityCreated(Activity activity, Bundle savedInstanceState) {}
